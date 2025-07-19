@@ -3,7 +3,8 @@ package me.moiz.uploadPlugin;
 import net.schmizz.sshj.SSHClient;
 import net.schmizz.sshj.sftp.SFTPClient;
 import net.schmizz.sshj.transport.verification.PromiscuousVerifier;
-import net.schmizz.sshj.xfer.TransferListener;
+import net.schmizz.sshj.xfer.FileSystemFile;
+import net.schmizz.sshj.common.StreamCopier;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -150,7 +151,14 @@ public class UploadPlugin extends JavaPlugin implements CommandExecutor {
             try (SFTPClient sftp = ssh.newSFTPClient()) {
                 // Change to remote directory if specified
                 if (!".".equals(remoteDir)) {
-                    sftp.cd(remoteDir);
+                    try {
+                        sftp.statExistence(remoteDir);
+                        // Directory exists, we can proceed
+                    } catch (Exception e) {
+                        // Directory might not exist, try to create it or use current directory
+                        getLogger().warning("Remote directory '" + remoteDir + "' might not exist, using current directory");
+                        remoteDir = ".";
+                    }
                 }
                 
                 // Create progress tracker
@@ -159,7 +167,12 @@ public class UploadPlugin extends JavaPlugin implements CommandExecutor {
                 scheduleSync(() -> sender.sendMessage("§eStarting file transfer..."));
                 
                 // Upload file with progress tracking
-                sftp.put(file.getAbsolutePath(), file.getName(), tracker);
+                String remotePath = remoteDir.equals(".") ? file.getName() : remoteDir + "/" + file.getName();
+                
+                // Use FileSystemFile for local file and upload with progress tracking
+                FileSystemFile localFile = new FileSystemFile(file);
+                sftp.getFileTransfer().setTransferListener(tracker);
+                sftp.put(localFile, remotePath);
                 
                 scheduleSync(() -> sender.sendMessage("§aUpload completed successfully!"));
             }
@@ -217,7 +230,7 @@ public class UploadPlugin extends JavaPlugin implements CommandExecutor {
     /**
      * Custom transfer listener for progress tracking
      */
-    private class ProgressTracker implements TransferListener {
+    private class ProgressTracker implements StreamCopier.Listener {
         private final CommandSender sender;
         private final long totalSize;
         private final int interval;
@@ -231,18 +244,8 @@ public class UploadPlugin extends JavaPlugin implements CommandExecutor {
         }
         
         @Override
-        public TransferListener directory(String name) {
-            return this;
-        }
-        
-        @Override
-        public TransferListener file(String name, long size) {
-            return this;
-        }
-        
-        @Override
-        public void transferred(long transferredBytes) {
-            this.transferred += transferredBytes;
+        public void reportProgress(long transferred) throws IOException {
+            this.transferred = transferred;
             
             if (totalSize > 0) {
                 int currentPercent = (int) ((transferred * 100) / totalSize);
