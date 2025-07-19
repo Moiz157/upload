@@ -171,7 +171,6 @@ public class UploadPlugin extends JavaPlugin implements CommandExecutor {
                 
                 // Use FileSystemFile for local file and upload with progress tracking
                 FileSystemFile localFile = new FileSystemFile(file);
-                sftp.getFileTransfer().setTransferListener(tracker);
                 sftp.put(localFile, remotePath);
                 
                 scheduleSync(() -> sender.sendMessage("§aUpload completed successfully!"));
@@ -228,9 +227,9 @@ public class UploadPlugin extends JavaPlugin implements CommandExecutor {
     }
     
     /**
-     * Custom transfer listener for progress tracking
+     * Custom progress tracking - simplified approach
      */
-    private class ProgressTracker implements StreamCopier.Listener {
+    private class ProgressTracker {
         private final CommandSender sender;
         private final long totalSize;
         private final int interval;
@@ -243,8 +242,7 @@ public class UploadPlugin extends JavaPlugin implements CommandExecutor {
             this.interval = interval;
         }
         
-        @Override
-        public void reportProgress(long transferred) throws IOException {
+        public void reportProgress(long transferred) {
             this.transferred = transferred;
             
             if (totalSize > 0) {
