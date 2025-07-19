@@ -1,0 +1,31 @@
+# SFTP Upload Plugin Configuration
+# Configure your SFTP server connection details below
+
+sftp:
+  # SFTP server hostname or IP address
+  host: "your-vps-ip"
+  
+  # SFTP server port (default: 22)
+  port: 22
+  
+  # Username for SFTP authentication
+  username: "your-username"
+  
+  # Password for SFTP authentication
+  password: "your-password"
+  
+  # Remote directory to upload files to (default: home directory)
+  remote-dir: "."
+  
+  # Whether to ignore host key verification (recommended: true for ease of use)
+  ignore-host-key: true
+
+# Upload progress settings
+progress:
+  # Progress update interval in percentage (e.g., 10 = update every 10%)
+  interval-percent: 10
+
+# Logging settings
+logging:
+  # Whether to log detailed upload information to console
+  verbose: false

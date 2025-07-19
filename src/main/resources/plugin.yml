@@ -1,0 +1,17 @@
+name: UploadPlugin
+version: '1.0'
+main: me.moiz.uploadPlugin.UploadPlugin
+api-version: '1.20'
+description: SFTP file upload plugin with progress tracking
+
+commands:
+  uploadfile:
+    description: Upload a file from server root to remote SFTP server
+    usage: /<command> <file_name>
+    permission: uploadplugin.use
+    permission-message: You don't have permission to use this command.
+
+permissions:
+  uploadplugin.use:
+    description: Allows using the uploadfile command
+    default: op
