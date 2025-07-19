@@ -164,13 +164,10 @@ public class UploadPlugin extends JavaPlugin implements CommandExecutor {
                 // Create progress tracker
                 ProgressTracker tracker = new ProgressTracker(sender, file.length(), progressInterval);
                 
-                scheduleSync(() -> sender.sendMessage("§eStarting file transfer..."));
-                
-                // Upload file with progress tracking
                 String remotePath = remoteDir.equals(".") ? file.getName() : remoteDir + "/" + file.getName();
                 
                 // Upload with custom progress tracking
-                uploadWithProgress(sftp, file, remotePath, sender);
+                uploadWithProgress(sftp, file, remotePath, sender, file.length());
                 
                 scheduleSync(() -> sender.sendMessage("§aUpload completed successfully!"));
             }
@@ -184,10 +181,10 @@ public class UploadPlugin extends JavaPlugin implements CommandExecutor {
         }
     }
     
-    private void uploadWithProgress(SFTPClient sftp, File file, String remotePath, CommandSender sender) throws IOException {
-        long fileSize = file.length();
+    private void uploadWithProgress(SFTPClient sftp, File file, String remotePath, CommandSender sender, long fileSize) throws IOException {
         long transferred = 0;
         int lastReportedPercent = 0;
+        long startTime = System.currentTimeMillis();
         
         try (java.io.FileInputStream fis = new java.io.FileInputStream(file);
              java.io.OutputStream os = sftp.getSFTPEngine().open(remotePath, 
@@ -205,6 +202,8 @@ public class UploadPlugin extends JavaPlugin implements CommandExecutor {
                 // Calculate and report progress
                 if (fileSize > 0) {
                     int currentPercent = (int) ((transferred * 100) / fileSize);
+                    long currentTime = System.currentTimeMillis();
+                    long elapsedTime = currentTime - startTime;
                     
                     // Report progress at 10% intervals
                     if (currentPercent >= lastReportedPercent + progressInterval && currentPercent <= 100) {
@@ -212,14 +211,33 @@ public class UploadPlugin extends JavaPlugin implements CommandExecutor {
                         
                         final int percent = Math.min(currentPercent, 100);
                         final long finalTransferred = transferred;
+                        final String speed = calculateSpeed(finalTransferred, elapsedTime);
                         scheduleSync(() -> {
-                            sender.sendMessage("§e" + percent + "% complete (" + 
+                            sender.sendMessage("§e" + percent + "% complete (" +
                                              formatFileSize(finalTransferred) + "/" + 
-                                             formatFileSize(fileSize) + ")");
+                                             formatFileSize(fileSize) + ") - " + speed);
                         });
                     }
                 }
             }
+        }
+    }
+    
+    private String calculateSpeed(long bytesTransferred, long elapsedTimeMs) {
+        if (elapsedTimeMs <= 0) {
+            return "0 B/s";
+        }
+        
+        double bytesPerSecond = (double) bytesTransferred / (elapsedTimeMs / 1000.0);
+        
+        if (bytesPerSecond < 1024) {
+            return String.format("%.0f B/s", bytesPerSecond);
+        } else if (bytesPerSecond < 1024 * 1024) {
+            return String.format("%.1f KB/s", bytesPerSecond / 1024);
+        } else if (bytesPerSecond < 1024 * 1024 * 1024) {
+            return String.format("%.1f MB/s", bytesPerSecond / (1024 * 1024));
+        } else {
+            return String.format("%.1f GB/s", bytesPerSecond / (1024 * 1024 * 1024));
         }
     }
     
