@@ -162,8 +162,6 @@ public class UploadPlugin extends JavaPlugin implements CommandExecutor {
                 }
                 
                 // Create progress tracker
-                ProgressTracker tracker = new ProgressTracker(sender, file.length(), progressInterval);
-                
                 String remotePath = remoteDir.equals(".") ? file.getName() : remoteDir + "/" + file.getName();
                 
                 // Upload with custom progress tracking
