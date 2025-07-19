@@ -169,9 +169,8 @@ public class UploadPlugin extends JavaPlugin implements CommandExecutor {
                 // Upload file with progress tracking
                 String remotePath = remoteDir.equals(".") ? file.getName() : remoteDir + "/" + file.getName();
                 
-                // Use FileSystemFile for local file and upload with progress tracking
-                FileSystemFile localFile = new FileSystemFile(file);
-                sftp.put(localFile, remotePath);
+                // Upload with custom progress tracking
+                uploadWithProgress(sftp, file, remotePath, sender);
                 
                 scheduleSync(() -> sender.sendMessage("§aUpload completed successfully!"));
             }
@@ -181,6 +180,45 @@ public class UploadPlugin extends JavaPlugin implements CommandExecutor {
                 ssh.disconnect();
             } catch (IOException e) {
                 getLogger().log(Level.WARNING, "Error disconnecting SSH client", e);
+            }
+        }
+    }
+    
+    private void uploadWithProgress(SFTPClient sftp, File file, String remotePath, CommandSender sender) throws IOException {
+        long fileSize = file.length();
+        long transferred = 0;
+        int lastReportedPercent = 0;
+        
+        try (java.io.FileInputStream fis = new java.io.FileInputStream(file);
+             java.io.OutputStream os = sftp.getSFTPEngine().open(remotePath, 
+                 java.util.EnumSet.of(net.schmizz.sshj.sftp.OpenMode.WRITE, 
+                                     net.schmizz.sshj.sftp.OpenMode.CREAT, 
+                                     net.schmizz.sshj.sftp.OpenMode.TRUNC)).new RemoteFileOutputStream()) {
+            
+            byte[] buffer = new byte[32768]; // 32KB buffer
+            int bytesRead;
+            
+            while ((bytesRead = fis.read(buffer)) != -1) {
+                os.write(buffer, 0, bytesRead);
+                transferred += bytesRead;
+                
+                // Calculate and report progress
+                if (fileSize > 0) {
+                    int currentPercent = (int) ((transferred * 100) / fileSize);
+                    
+                    // Report progress at 10% intervals
+                    if (currentPercent >= lastReportedPercent + progressInterval && currentPercent <= 100) {
+                        lastReportedPercent = (currentPercent / progressInterval) * progressInterval;
+                        
+                        final int percent = Math.min(currentPercent, 100);
+                        final long finalTransferred = transferred;
+                        scheduleSync(() -> {
+                            sender.sendMessage("§e" + percent + "% complete (" + 
+                                             formatFileSize(finalTransferred) + "/" + 
+                                             formatFileSize(fileSize) + ")");
+                        });
+                    }
+                }
             }
         }
     }
@@ -224,42 +262,5 @@ public class UploadPlugin extends JavaPlugin implements CommandExecutor {
     
     private void scheduleSync(Runnable task) {
         Bukkit.getScheduler().runTask(this, task);
-    }
-    
-    /**
-     * Custom progress tracking - simplified approach
-     */
-    private class ProgressTracker {
-        private final CommandSender sender;
-        private final long totalSize;
-        private final int interval;
-        private long transferred = 0;
-        private int lastReportedPercent = 0;
-        
-        public ProgressTracker(CommandSender sender, long totalSize, int interval) {
-            this.sender = sender;
-            this.totalSize = totalSize;
-            this.interval = interval;
-        }
-        
-        public void reportProgress(long transferred) {
-            this.transferred = transferred;
-            
-            if (totalSize > 0) {
-                int currentPercent = (int) ((transferred * 100) / totalSize);
-                
-                // Report progress at specified intervals
-                if (currentPercent >= lastReportedPercent + interval && currentPercent <= 100) {
-                    lastReportedPercent = (currentPercent / interval) * interval;
-                    
-                    final int percent = Math.min(currentPercent, 100);
-                    scheduleSync(() -> {
-                        sender.sendMessage("§e" + percent + "% complete (" + 
-                                         formatFileSize(transferred) + "/" + 
-                                         formatFileSize(totalSize) + ")");
-                    });
-                }
-            }
-        }
     }
 }
